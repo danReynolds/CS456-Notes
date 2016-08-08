@@ -549,9 +549,9 @@ ex. When gateway router 3a in AS3 advertises a route to gateway router 1c in AS1
 
 Now when router 1d learns about this route to x over iBGP from 1c, router 1d may want to forward packets to x along this route, and adds an entry (x, l) in its forwarding table where l is its interface that begins the least-cost path from 1d towards the gateway router 1c.
 
-To determine l, 1d provides the IP address in the NEXT-HOP attribute, the IP of 3a, to its intra-AS routing module, which will use an intra-as protocol like RIP or OSPF to figure out the next subnet to go to on the path out of the subnet.
+To determine l, 1d provides the IP address in the NEXT-HOP attribute, the IP of 3a, to its intra-AS routing module, which will use an intra-as protocol like RIP or OSPF to figure out the next subnet to go to on the path out of the AS.
 
-The intra-AS routing algorithm has determined the least-cost path to all subnets attached to the routers in AS1, so 1d receives the least cost path 1d to the 1c-3a subnet, leading out of the AS  on the route to the desired AS and it adds x and this interface as (x, l) in its forwarding table.
+The intra-AS routing algorithm has determined the least-cost path to all subnets attached to the routers in AS1, so 1d receives the least cost path from 1d to the subnet with a gateway router to the subnet containing the NEXT-HOP IP, leading out of the AS  on the route to the desired AS and it adds x and this interface as (x, l) in its forwarding table.
 
 3. **BGP preference attributes**: Includes attributes that allow routers to assign preference metrics to routes, and an attribute that indicates how the prefix was inserted into BGP at the origin AS.
 
@@ -675,7 +675,7 @@ Even without cycles, the broadcast duplication can get out of hand, if node x ha
 
 Each node maintains a list of the source address and sequence nubmer of each broadcast packcet it has already received, duplicated and forwarded. When a broadcast packet arrives, it first checks if the packet is in it list and drops it if so.
 
-2. Second approach to controlled flooding is **reverse path forwarding (RPF)**, when a router receives a broadcast packet with a given source address, it only floods if the packet arrived on the shortest unicast path back to its source.
+2. Second approach to controlled flooding is **reverse path forwarding (RPF)**, when a router receives a broadcast packet with a given source address, it only floods if the packet arrived on the shortest unicast path back to its source. Relies on router's knowledge of unicast shortest paths from it to sender. Makes sense, can form a source-based spanning tree. Still sends packets but they don't get forwarded.
 
 It can drop it otherwise since it knows that it either has or will receive the packet on the shortest path.
 
@@ -689,7 +689,7 @@ A minimum spanning tree would send to all nodes once, with minimal cost.
 
 Main complexity comes from the creation and maintenance of the spanning tree.
 
-In the **center-based approach**, a center node is defined. Nodes then unicast tree-join messages addressed towards the center until it either arrives at a node that already belongs to the spanning tree or arrives at the center.
+In the **center-based approach**, a center node is defined. Nodes then unicast tree-join messages addressed towards the center/rendezvous point until it either arrives at a node that already belongs to the spanning tree or arrives at the center. It goes on its shortest path towards the center.
 
 The path that the tree-join message has followed defines the branch of the spanning tree between the edge node that initiated the tree-join and the center.
 
@@ -697,7 +697,7 @@ The path that the tree-join message has followed defines the branch of the spann
 
 A multicast packet is delivered to only a subset of network nodes, like in a software upgrade where you want to send it to everyone who needs the upgrade.
 
-Need to identify the receives of a multicast packet and address the packet to those receivers.
+Need to identify the recipients of a multicast packet and address the packet to those receivers.
 
 Uses **address indirection** = a single identifier is used for the group of receivers and a copy of the packet that is addressed to the group using this single identifier is delivered to all of the multicast receivers associated with that group.
 
@@ -721,7 +721,7 @@ IGMP has 3 message types:
 
 2. **Multicast Routing Protocols**:
 
-The goal of multicast routinng is to find a tree of links that connect all of the routers that have attached hosts belonging to the multicast group.
+The goal of multicast routing is to find a tree of links that connect all of the routers that have attached hosts belonging to the multicast group.
 
 The tree may contain routers that do not have attached hosts belonging to the multicast group, since there may be no way to connect the hosts are do belong without including some that don't.
 
@@ -738,3 +738,41 @@ G receives an unwanted packet, the solution to the problem of receiving unwanted
 **pruning**: A multicast router that receives multicast packets and thas has no attached hosts joined to that group will send a prune message to its upstream router, informing it that it does not need to send multicast packets down to it.
 
 If a router receives prune messages from each of its downstream routers, then it can forward a prune message upstream.
+
+## Multicast Routing in the Internet
+
+**DVMRP (Distance-Vectory Multicast Routing Protocol)**: uses source-based trees with reverse path forwarding and pruning.
+
+RPF trees based on DVMRP's own routing tables constructed by communicating DVMRP routers.
+
+No assumptions about underlying unicast. Initial datagram to multicast flooded everywhere by source, routers not wanting group send upstream prune message.
+
+**soft state**: DVMRP periodically (1min) forgets that branches are pruned.
+
+Multicast data again flows down unpruned branch. The downstream router then has to respond indicating that it should be re-pruned, else it will continue receiving data.
+
+Routers can quickly regraft to the tree using IGMP and joining at the leaf.
+
+**PIM (Protocol Independent Multicast):**
+
+Widely used Internet multicast routing protocol, recognizes 2 multicast distribution scenarios:
+
+1. Dense mode: In dense mode, multicast group members are densely located, many or most of the routers in the area need to be involved in routing multicast datagrams.
+
+Uses flood-and-prune reverse path forwarding technique similar to DVMRP.
+
+Less complicated downstream flood than DVMRP reduces reliance on underlying routing algorithm.
+
+Has protocol mechanism for router to detect it as a leaf-node router.
+
+2. Sparse mode: The number of routers with attached group members is small with respect to the total number of routers.
+
+Center-based approach. Router sends join message to rendezvous point.
+
+Intermediate routers update state and forward join. After joining via center-based approach, can switch to source-specific tree.
+
+## Tunneling
+
+Connect island of multicast routers in a sea of unicast routers. Multicast datagram encapsulated inside normal non-multicast datagram.
+
+Receiving multicast router decapsulates to get multicast datagram.
